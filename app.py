@@ -3,10 +3,9 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # ------------------------
-# Данные (как в последнем HTML варианте)
+# Данные (как в HTML варианте)
 # ------------------------
 
 TOTAL_REVENUE = 620_682_373.59
@@ -73,7 +72,7 @@ df_products = pd.DataFrame(products_data, columns=cols)
 df_products["quantity"] = df_products["quantity_base"].astype(float)
 
 # ------------------------
-# Функции расчета (как в HTML)
+# Функции расчета
 # ------------------------
 
 def calculate_total_labor(df):
@@ -139,10 +138,9 @@ st.set_page_config(page_title="Интерактивный Отчет Себес�
 st.title("📊 Интерактивный Отчет Себестоимости")
 st.markdown("Анализ рентабельности и финансовых показателей по видам продукции")
 
-# Сайдбар для управления
+# Сайдбар
 st.sidebar.header("⚙ Управление параметрами")
 
-# Ползунки рентабельности по группам
 profitability_internal = st.sidebar.slider("Внутренний заказ (%)", 5.0, 60.0, 30.0, 0.5)
 profitability_external = st.sidebar.slider("Внешние заказы (%)", 5.0, 60.0, 30.0, 0.5)
 profitability_tech = st.sidebar.slider("Вычтех (%)", 5.0, 60.0, 30.0, 0.5)
@@ -153,40 +151,30 @@ profitability_by_category = {
     "Вычтех": profitability_tech
 }
 
-# Кнопка сброса
 if st.sidebar.button("🔄 Сброс значений"):
     st.rerun()
 
-# Расчет метрик
+# Расчет
 df_metrics = compute_metrics(df_products, profitability_by_category)
 kpi = aggregate_kpi(df_metrics)
 
-# ------------------------
 # KPI Dashboard
-# ------------------------
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Выручка", f"{kpi['total_revenue']:,.0f} ₽", delta=None)
+    st.metric("Выручка", f"{kpi['total_revenue']:,.0f} ₽")
 with col2:
-    st.metric("EBITDA", f"{kpi['total_ebitda']:,.0f} ₽", delta=None)
+    st.metric("EBITDA", f"{kpi['total_ebitda']:,.0f} ₽")
 with col3:
-    st.metric("Маржинальный доход", f"{kpi['total_margin_income']:,.0f} ₽", delta=None)
+    st.metric("Маржинальный доход", f"{kpi['total_margin_income']:,.0f} ₽")
 with col4:
-    st.metric("Рентабельность", f"{kpi['profitability_pct']:.1f}%", delta=None)
+    st.metric("Рентабельность", f"{kpi['profitability_pct']:.1f}%")
 
-# ------------------------
-# Выбор категории
-# ------------------------
-category = st.selectbox("Фильтр по категории:", ["all"] + df_products["category"].unique().tolist())
+# Фильтр по категории
+category = st.selectbox("Фильтр по категории:", ["all"] + sorted(df_products["category"].unique().tolist()))
 
-if category != "all":
-    df_filtered = df_metrics[df_metrics["category"] == category]
-else:
-    df_filtered = df_metrics
+df_filtered = df_metrics[df_metrics["category"] == category] if category != "all" else df_metrics
 
-# ------------------------
 # Таблица продуктов
-# ------------------------
 st.subheader("📦 Анализ по продуктам")
 st.dataframe(
     df_filtered[["name", "quantity", "price_new", "revenue", "margin_per_unit", "ebitda_per_unit"]]
@@ -198,12 +186,11 @@ st.dataframe(
         "margin_per_unit": "{:,.0f}",
         "ebitda_per_unit": "{:,.0f}"
     }),
-    use_container_width=True
+    use_container_width=True,
+    height=400
 )
 
-# ------------------------
 # Сводка по категориям
-# ------------------------
 st.subheader("📈 Сводка по категориям")
 cat_summary = df_metrics.groupby("category").agg({
     "revenue": "sum",
@@ -213,65 +200,28 @@ cat_summary = df_metrics.groupby("category").agg({
 cat_summary["margin_pct"] = (cat_summary["margin_income"] / cat_summary["revenue"] * 100).round(1)
 cat_summary["ebitda_pct"] = (cat_summary["ebitda"] / cat_summary["revenue"] * 100).round(1)
 
-st.dataframe(cat_summary.style.format({
-    "revenue": "{:,.0f}",
-    "margin_income": "{:,.0f}",
-    "ebitda": "{:,.0f}"
-}))
+st.dataframe(cat_summary)
 
-# ------------------------
 # Графики
-# ------------------------
 col1, col2 = st.columns(2)
-
 with col1:
-    fig_pie = px.pie(
-        cat_summary.reset_index(),
-        values="revenue", 
-        names="category",
-        title="Доля выручки по категориям"
-    )
+    fig_pie = px.pie(cat_summary.reset_index(), values="revenue", names="category", title="Доля выручки")
     st.plotly_chart(fig_pie, use_container_width=True)
 
 with col2:
-    fig_bar = px.bar(
-        cat_summary.reset_index(),
-        x="category",
-        y=["revenue", "margin_income", "ebitda"],
-        title="Выручка, Маржа, EBITDA по категориям",
-        barmode="group"
-    )
+    fig_bar = px.bar(cat_summary.reset_index(), x="category", y=["revenue", "margin_income"], 
+                     title="Выручка и Маржа по категориям", barmode="group")
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# ------------------------
 # Экспорт
-# ------------------------
-st.subheader("💾 Экспорт данных")
-col1, col2, col3 = st.columns(3)
+st.subheader("💾 Экспорт")
+col1, col2 = st.columns(2)
 with col1:
     csv = df_metrics.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        "Скачать таблицу продуктов",
-        csv,
-        "sebestoimost_products.csv",
-        "text/csv"
-    )
+    st.download_button("📥 Таблица продуктов", csv, "sebestoimost.csv", "text/csv")
 with col2:
-    csv_kpi = pd.DataFrame([kpi]).to_csv(index=False).encode('utf-8')
-    st.download_button(
-        "Скачать KPI",
-        csv_kpi,
-        "sebestoimost_kpi.csv",
-        "text/csv"
-    )
-with col3:
     csv_cat = cat_summary.to_csv().encode('utf-8')
-    st.download_button(
-        "Скачать сводку по категориям",
-        csv_cat,
-        "sebestoimost_categories.csv",
-        "text/csv"
-    )
+    st.download_button("📥 Сводка категорий", csv_cat, "categories.csv", "text/csv")
 
 st.markdown("---")
-st.caption("Интерактивный отчет себестоимости © 2025 | Данные актуальны на момент расчета")
+st.caption("© 2025 | Данные актуальны на момент расчета")
